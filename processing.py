@@ -10,6 +10,7 @@ from copy import copy
 import configparser
 import datetime
 import json
+from wtv_db import WtvDb
 
 logging.basicConfig(filename='status.log', level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -54,9 +55,10 @@ COMSKIP_EXE = configparser.get('comskip', 'executable', fallback=None)
 COMSKIP_RUN = configparser.getboolean('comskip', 'run.if.missing', fallback=False)
 COMSKIP_INI = configparser.get('comskip', 'comskip.ini', fallback=None)
 
-tvdb = tvdb_api.TVDB(api_key=TVDB_API_KEY, username=TVDB_USERNAME, user_key=TVDB_USER_KEY)
+DB_FILE = configparser.get('main', 'database.file', fallback='db.sqlite')
 
-MANUAL_MAP = {}
+wtvdb = WtvDb(DB_FILE)
+tvdb = tvdb_api.TVDB(api_key=TVDB_API_KEY, username=TVDB_USERNAME, user_key=TVDB_USER_KEY, wtvdb=wtvdb)
 
 
 def execute(args):
@@ -80,18 +82,22 @@ def get_metadata(wtv_file):
     episode_name = metadata.get('WM/SubTitle', None)
 
     filename = os.path.basename(wtv_file)
-    if filename in MANUAL_MAP:
-        manual = MANUAL_MAP[filename]
-        if 'series' in manual:
-            series = manual['series']
-        if 'episode_name' in manual:
-            episode_name = manual['episode_name']
-        season = manual['season']
-        episode_num = manual['episode_num']
+    wtv_obj = wtvdb.get_wtv(filename)
+    if wtv_obj and wtv_obj.selected_episode:
+        ep = wtv_obj.selected_episode.episode
+        season = ep.season
+        episode_num = ep.episode_num
     elif series and episode_name:
         # Get season & episode number
         air_date = extract_original_air_date(wtv_file, parse_from_filename=True, metadata=metadata)
-        season, episode_num = tvdb.find_episode(series, episode=episode_name, air_date=air_date)
+        episodes = tvdb.find_episode(series, episode=episode_name, air_date=air_date)
+        if len(episodes) == 1:
+            season, episode_num = tvdb_api.TVDB.season_number(episodes[0])
+        else:
+            # Handle multiple options
+            wtvdb.store_candidates(tvdb, filename, metadata, episodes)
+            season = None
+            episode_num = None
     else:
         season = None
         episode_num = None
@@ -120,6 +126,9 @@ def process(wtv_file, com_file, srt_file):
         successful = convert(wtv_file, out_video, commercials)
         if successful:
             split_subtitles(srt_file, invert_commercial(commercials), out_srt)
+            # If we finished with the WTV, delete it
+            if wtvdb.get_wtv(filename) is not None:
+                wtvdb.delete_wtv(filename)
             if not DEBUG and DELETE_SOURCE:
                 os.remove(wtv_file)
                 os.remove(com_file)

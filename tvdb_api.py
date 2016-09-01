@@ -2,19 +2,20 @@ import requests
 import json
 import sys
 
+from wtv_db import CandidateEpisode, Series, SelectedEpisode, WtvFile, WtvDb
+
 BASE_URL = 'https://api.thetvdb.com'
 
 SERIES = {}
 
 
 class TVDB():
-    def __init__(self, api_key, username, user_key):
+    def __init__(self, api_key, username, user_key, wtvdb):
         self._api_key = api_key
         self._username = username
         self._user_key = user_key
         self._jwt = None
-        self.series = {}
-        self._read_data()
+        self._wtvdb = wtvdb
 
     def _get_jwt(self):
         payload = {'apikey': self._api_key, 'username': self._username, 'userkey': self._user_key}
@@ -36,7 +37,8 @@ class TVDB():
     def search_series(self, name):
         if self._jwt is None:
             self.refresh()
-        if name not in self.series:
+        series = self._wtvdb.find_series(name)
+        if series is None:
             headers = {'Authorization': 'Bearer ' + self._jwt}
             params = {'name': name}
             res = requests.get(BASE_URL + '/search/series', params=params, headers=headers)
@@ -44,9 +46,9 @@ class TVDB():
                 res = res.json()
                 for s in res['data']:
                     if s['seriesName'] == name:
-                        self.series[name] = s['id']
-                        self._write_data()
-        return self.series[name]
+                        id = int(s['id'])
+                        series = self._wtvdb.get_or_create_series(id, name)
+        return series
 
     def get_episodes(self, series_id):
         if self._jwt is None:
@@ -62,16 +64,21 @@ class TVDB():
             page = res['links']['next']
         return episodes
 
+    @classmethod
+    def season_number(e):
+        return (e['airedSeason'], e['airedEpisodeNumber'])
+
     def find_episode(self, series, episode=None, air_date=None):
         if episode is None and air_date is None:
             raise Exception('Both episode and air_date cannot be null')
-        id = self.search_series(series)
+        id = self.search_series(series).id
         if id:
             if episode:
                 episodes = self.get_episodes(id)
                 for e in episodes:
                     if e['episodeName'] == episode:
-                        return (e['airedSeason'], e['airedEpisodeNumber'])
+                        #return (e['airedSeason'], e['airedEpisodeNumber'])
+                        return [e]
             if air_date:
                 if self._jwt is None:
                     self.refresh()
@@ -82,17 +89,24 @@ class TVDB():
                                    params=params)
                 res = res.json()
                 if 'data' in res:
-                    if len(res['data']) == 1:
-                        e = res['data'][0]
-                        return (e['airedSeason'], e['airedEpisodeNumber'])
-        return (None, None)
+                    return res['data']
+                    # if len(res['data']) == 1:
+                    #     e = res['data'][0]
+                    #     return (e['airedSeason'], e['airedEpisodeNumber'])
+                    #     return [e]
+                    # elif self._wtvdb is not None:
+                    #     series_obj = self._wtvdb.get_or_create_series(id, series)
+                    #     candidates = [CandidateEpisode.from_tvdb(series_obj, e) for e in res['data']]
+                    #     WtvFile(filename=)
+
+        return []
 
     def test(self):
         # /series/{id}/episodes/query
         if self._jwt is None:
             self.refresh()
         headers = {'Authorization': 'Bearer ' + self._jwt}
-        series_id = self.search_series('Parking Wars')
+        series_id = self.search_series('Parking Wars').id
         res = requests.get(BASE_URL + '/series/{}/episodes/query/params'.format(series_id), headers=headers)
         return res.json()
 
@@ -100,7 +114,7 @@ class TVDB():
         if self._jwt is None:
             self.refresh()
         headers = {'Authorization': 'Bearer ' + self._jwt}
-        series_id = self.search_series(series_name)
+        series_id = self.search_series(series_name).id
         params = {'firstAired': firstAired}
         res = requests.get(BASE_URL + '/series/{}/episodes/query'.format(series_id), headers=headers, params=params)
         return res.json()
