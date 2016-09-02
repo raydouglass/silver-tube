@@ -64,7 +64,7 @@ class TVDB():
             page = res['links']['next']
         return episodes
 
-    @classmethod
+    @staticmethod
     def season_number(e):
         return (e['airedSeason'], e['airedEpisodeNumber'])
 

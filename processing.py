@@ -9,8 +9,9 @@ import pysrt
 from copy import copy
 import configparser
 import datetime
-import json
 from wtv_db import WtvDb
+import glob
+from string import Template
 
 logging.basicConfig(filename='status.log', level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -24,7 +25,11 @@ if len(sys.argv) > 1:
 else:
     configparser.read('config.ini')
 
-WTV_IN_DIR = configparser.get('directories', 'wtv.in')
+TEMPLATE = configparser.get('directories', 'out.pattern',
+                            fallback='${series}/Season ${season}/${orig_basename} - ${series} - s${season_padded}e${episode_padded} - ${episode_name}.${ext}')
+TEMPLATE = Template(TEMPLATE)
+WTV_IN_DIR = configparser.get('directories', 'tv.in')
+TV_PATTERN = configparser.get('directories', 'tv.pattern')
 COM_IN_DIR = configparser.get('directories', 'commercial.in')
 SRT_IN_DIR = configparser.get('directories', 'srt.in')
 TEMP_DIR = configparser.get('directories', 'temp.dir')
@@ -110,22 +115,28 @@ def process(wtv_file, com_file, srt_file):
 
     series, episode_name, season, episode_num = get_metadata(wtv_file)
     if series and episode_name and season and episode_num:
-        padded_season = str(season) if int(season) >= 10 else '0' + str(season)
-        padded_episode_num = str(episode_num) if int(episode_num) >= 10 else '0' + str(episode_num)
+        # padded_season = str(season) if int(season) >= 10 else '0' + str(season)
+        # padded_episode_num = str(episode_num) if int(episode_num) >= 10 else '0' + str(episode_num)
 
-        dir = os.path.join(OUT_DIR, '{}'.format(series), 'Season {}'.format(season))
-        os.makedirs(dir, exist_ok=True)
-        out = os.path.join(dir, '{} - s{}e{} - {}'.format(series, padded_season, padded_episode_num, episode_name))
-        out_video = out + '.mp4'
-        out_srt = out + '.eng.srt'
-        logger.debug(out_video)
-
+        # dir = os.path.join(OUT_DIR, '{}'.format(series), 'Season {}'.format(season))
+        # os.makedirs(dir, exist_ok=True)
+        # out = os.path.join(dir, '{} - s{}e{} - {}'.format(series, padded_season, padded_episode_num, episode_name))
+        # out_video = out + '.mp4'
+        # out_srt = out + '.eng.srt'
         filename = os.path.basename(wtv_file)
+        filename_wo_ext = os.path.splitext(filename)[0]
+        out_video = os.path.join(OUT_DIR, create_filename(series, season, episode_num, episode_name, filename_wo_ext, 'mp4'))
+        out_srt = os.path.join(OUT_DIR, create_filename(series, season, episode_num, episode_name, filename_wo_ext, 'eng.srt'))
+
+        if not os.path.exists(os.path.dirname(out_video)):
+            os.makedirs(os.path.dirname(out_video))
+        if not os.path.exists(os.path.dirname(out_srt)):
+            os.makedirs(os.path.dirname(out_srt))
 
         commercials = parse_commercial_file(com_file)
+        split_subtitles(srt_file, invert_commercial(commercials), out_srt)
         successful = convert(wtv_file, out_video, commercials)
         if successful:
-            split_subtitles(srt_file, invert_commercial(commercials), out_srt)
             # If we finished with the WTV, delete it
             if wtvdb.get_wtv(filename) is not None:
                 wtvdb.delete_wtv(filename)
@@ -264,10 +275,12 @@ def convert(in_file, out_file, commercials):
 
 def process_directory(wtv_dir, com_dir, srt_dir):
     count = 0
-    for wtv in sorted(os.listdir(wtv_dir)):
-        if wtv.endswith('.wtv'):
+    files = glob.glob(os.path.join(WTV_IN_DIR, TV_PATTERN))
+    for wtv_file in sorted(files):
+        if os.path.isfile(wtv_file):
             try:
-                wtv_file = os.path.join(wtv_dir, wtv)
+                # wtv_file = os.path.join(wtv_dir, wtv)
+                wtv = os.path.basename(wtv_file)
                 time = datetime.datetime.now() - datetime.timedelta(minutes=5)
                 modified = datetime.datetime.fromtimestamp(os.path.getmtime(wtv_file))
                 if modified < time:
@@ -312,10 +325,21 @@ def durations_to_invert(durations):
     return ret
 
 
-manual_map_file = os.path.join(WTV_IN_DIR, 'manual_map.json')
-if os.path.isfile(manual_map_file):
-    with open(manual_map_file, 'r') as f:
-        MANUAL_MAP = json.load(f)
+def create_filename(series, season, episode_num, episode_name, filename, extension):
+    padded_season = str(season) if int(season) >= 10 else '0' + str(season)
+    padded_episode_num = str(episode_num) if int(episode_num) >= 10 else '0' + str(episode_num)
+    d = dict(
+        series=series,
+        season=season,
+        episode=episode_num,
+        episode_name=episode_name,
+        ext=extension,
+        season_padded=padded_season,
+        episode_padded=padded_episode_num,
+        orig_basename=filename
+    )
+    return TEMPLATE.substitute(d)
+
 
 if __name__ == '__main__':
     process_directory(WTV_IN_DIR, COM_IN_DIR, SRT_IN_DIR)
