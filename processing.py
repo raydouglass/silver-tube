@@ -278,6 +278,7 @@ def process_directory(wtv_dir, com_dir, srt_dir):
     files = glob.glob(os.path.join(WTV_IN_DIR, TV_PATTERN))
     for wtv_file in sorted(files):
         if os.path.isfile(wtv_file):
+            wtvdb.begin()
             try:
                 # wtv_file = os.path.join(wtv_dir, wtv)
                 wtv = os.path.basename(wtv_file)
@@ -302,6 +303,7 @@ def process_directory(wtv_dir, com_dir, srt_dir):
                         logger.warn('No commercial or srt file for {}...skipping'.format(wtv_file))
             except Exception:
                 logger.exception('Exception while handling {}'.format(wtv))
+            wtvdb.end()
     logger.info('Processed {} files'.format(count))
 
 

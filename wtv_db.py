@@ -43,16 +43,6 @@ class CandidateEpisode(Base):
     wtv_file_id = Column(Integer, ForeignKey('wtv_file.filename'))
     wtv_file = relationship('WtvFile', back_populates='candidate_episodes')
 
-    @staticmethod
-    def from_tvdb(series, e):
-        return CandidateEpisode(id=int(e['id']),
-                                name=e['episodeName'],
-                                description=e['overview'],
-                                air_date=datetime.strptime(e['firstAired'], '%Y-%m-%d').date(),
-                                season = int(e['airedSeason']),
-                                episode_num=int(e['airedEpisodeNumber']),
-                                series=series )
-
     def get_details(self):
         padded_season = str(self.season) if self.season >= 10 else '0' + str(self.season)
         padded_episode_num = str(self.episode_num) if self.episode_num >= 10 else '0' + str(self.episode_num)
@@ -71,7 +61,8 @@ class WtvFile(Base):
     filename = Column(String(256), primary_key=True)
     description = Column(Text)
     candidate_episodes = relationship('CandidateEpisode', cascade='all, delete-orphan')
-    selected_episode = relationship('SelectedEpisode', back_populates='wtv_file', uselist=False, cascade='all, delete-orphan')
+    selected_episode = relationship('SelectedEpisode', back_populates='wtv_file', uselist=False,
+                                    cascade='all, delete-orphan')
 
 
 class SelectedEpisode(Base):
@@ -93,18 +84,43 @@ class WtvDb():
             self._engine = create_engine('sqlite:///' + path, echo=False)
         Base.metadata.create_all(self._engine)
         self._Session = sessionmaker(bind=self._engine)
+        self._session = None
+
+    def begin(self):
+        if self._session:
+            self._session.close()
         self._session = self._Session()
 
+    def end(self):
+        self._session.close()
+        self._session = None
+
+    def _check_session(self):
+        if self._session is None:
+            raise Exception('Session is None. Call begin()')
+
     def store_candidates(self, tvdb, wtv_filename, meta, episodes):
+        self._check_session()
         series_name = meta['Title']
         series = tvdb.search_series(series_name)
-        candidates = [CandidateEpisode.from_tvdb(series, e) for e in episodes]
+        candidates = [self.from_tvdb(series, e) for e in episodes]
         wtv_file = WtvFile(filename=wtv_filename, description=meta['WM/SubTitleDescription'])
-        wtv_file=self._session.merge(wtv_file)
-        wtv_file.candidate_episodes=candidates
+        wtv_file = self._session.merge(wtv_file)
+        wtv_file.candidate_episodes = candidates
         self._session.commit()
 
+    def from_tvdb(self, series, e):
+        self._check_session()
+        self._session.merge(CandidateEpisode(id=int(e['id']),
+                                             name=e['episodeName'],
+                                             description=e['overview'],
+                                             air_date=datetime.strptime(e['firstAired'], '%Y-%m-%d').date(),
+                                             season=int(e['airedSeason']),
+                                             episode_num=int(e['airedEpisodeNumber']),
+                                             series=series))
+
     def get_or_create_series(self, id, series_name):
+        self._check_session()
         series = self._session.query(Series).get(id)
         if not series:
             series = Series(id=id, name=series_name)
@@ -112,14 +128,17 @@ class WtvDb():
         return series
 
     def save(self, obj):
+        self._check_session()
         self._session.add(obj)
         self._session.commit()
 
     def find_series(self, series_name):
+        self._check_session()
         query = self._session.query(Series).filter(Series.name == series_name)
         return query.one_or_none()
 
     def get_selected_episode(self, wtv_filename):
+        self._check_session()
         query = self._session.query(WtvFile).filter(WtvFile.filename == wtv_filename)
         wtv = query.one_or_none()
         if wtv and wtv.selected_episode:
@@ -128,9 +147,11 @@ class WtvDb():
             return None
 
     def get_wtv(self, filename):
+        self._check_session()
         return self._session.query(WtvFile).get(filename)
 
     def delete_wtv(self, filename):
+        self._check_session()
         wtv_file = self.get_wtv(filename)
         if wtv_file:
             self._session.delete(wtv_file)
@@ -183,6 +204,8 @@ class WtvDb():
 if __name__ == '__main__':
     if len(sys.argv) > 1:
         wtvdb = WtvDb(sys.argv[1])
+        wtvdb.begin()
         wtvdb.resolve_all()
+        wtvdb.end()
     else:
         print('Too few args')
