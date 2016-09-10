@@ -120,15 +120,7 @@ def process(wtv_file, com_file, srt_file):
     tvdb.refresh()
 
     series, episode_name, season, episode_num = get_metadata(wtv_file)
-    if series and season and episode_num:
-        # padded_season = str(season) if int(season) >= 10 else '0' + str(season)
-        # padded_episode_num = str(episode_num) if int(episode_num) >= 10 else '0' + str(episode_num)
-
-        # dir = os.path.join(OUT_DIR, '{}'.format(series), 'Season {}'.format(season))
-        # os.makedirs(dir, exist_ok=True)
-        # out = os.path.join(dir, '{} - s{}e{} - {}'.format(series, padded_season, padded_episode_num, episode_name))
-        # out_video = out + '.mp4'
-        # out_srt = out + '.eng.srt'
+    if series is not None and season is not None and episode_num is not None:
         filename = os.path.basename(wtv_file)
         filename_wo_ext = os.path.splitext(filename)[0]
         out_video = os.path.join(OUT_DIR, create_filename(series, season, episode_num, episode_name, filename_wo_ext, 'mp4'))
