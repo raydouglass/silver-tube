@@ -92,12 +92,16 @@ def get_metadata(wtv_file):
         ep = wtv_obj.selected_episode.episode
         season = ep.season
         episode_num = ep.episode_num
-    elif series and episode_name:
+        if episode_name is None:
+            episode_name = ep.name
+    elif series is not None:
         # Get season & episode number
         air_date = extract_original_air_date(wtv_file, parse_from_filename=True, metadata=metadata)
         episodes = tvdb.find_episode(series, episode=episode_name, air_date=air_date)
         if len(episodes) == 1:
             season, episode_num = tvdb_api.TVDB.season_number(episodes[0])
+            if episode_name is None and episodes[0]['episodeName'] is not None:
+                episode_name = episodes[0]['episodeName']
         else:
             # Handle multiple options
             wtvdb.store_candidates(tvdb, filename, metadata, episodes)
@@ -106,6 +110,8 @@ def get_metadata(wtv_file):
     else:
         season = None
         episode_num = None
+    if episode_name is None and episode_num is not None:
+        episode_name = 'Episode #{}'.format(episode_num)
     return series, episode_name, season, episode_num
 
 
@@ -114,7 +120,7 @@ def process(wtv_file, com_file, srt_file):
     tvdb.refresh()
 
     series, episode_name, season, episode_num = get_metadata(wtv_file)
-    if series and episode_name and season and episode_num:
+    if series and season and episode_num:
         # padded_season = str(season) if int(season) >= 10 else '0' + str(season)
         # padded_episode_num = str(episode_num) if int(episode_num) >= 10 else '0' + str(episode_num)
 

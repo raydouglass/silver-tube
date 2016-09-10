@@ -111,7 +111,7 @@ class WtvDb():
 
     def from_tvdb(self, series, e):
         self._check_session()
-        self._session.merge(CandidateEpisode(id=int(e['id']),
+        return self._session.merge(CandidateEpisode(id=int(e['id']),
                                              name=e['episodeName'],
                                              description=e['overview'],
                                              air_date=datetime.strptime(e['firstAired'], '%Y-%m-%d').date(),

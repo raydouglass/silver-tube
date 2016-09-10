@@ -134,14 +134,20 @@ class TVDB():
 def main(args):
     import configparser
     import wtv
+    import wtv_db
     configparser = configparser.ConfigParser()
     configparser.read('config.ini')
     TVDB_USERNAME = configparser.get('tvdb', 'username')
     TVDB_USER_KEY = configparser.get('tvdb', 'userkey')
     TVDB_API_KEY = configparser.get('tvdb', 'apikey')
+    DB_FILE = configparser.get('main', 'database.file', fallback='db.sqlite')
+    wtvdb = wtv_db.WtvDb(DB_FILE)
+    wtvdb.begin()
+    tvdb = TVDB(api_key=TVDB_API_KEY, username=TVDB_USERNAME, user_key=TVDB_USER_KEY, wtvdb=wtvdb)
+    wtv_file = args[1]
+    meta = wtv.extract_metadata(wtv_file)
+    air_date = wtv.extract_original_air_date(wtv_file, parse_from_filename=True, metadata=meta)
 
-    tvdb = TVDB(api_key=TVDB_API_KEY, username=TVDB_USERNAME, user_key=TVDB_USER_KEY)
-    meta = wtv.extract_metadata(args[1])
     for key in meta:
         print('{}={}'.format(key, meta[key]))
     print()
@@ -150,10 +156,18 @@ def main(args):
 
     print('Title: {}'.format(series))
     print('SubTitle: {}'.format(name))
-    season, episode_num = tvdb.find_episode(series, name)
-    print('Season: {}'.format(season))
-    print('Episode: {}'.format(episode_num))
-
+    episodes = tvdb.find_episode(series, episode=name, air_date=air_date)
+    if len(episodes) == 1:
+        season, episode_num = TVDB.season_number(episodes[0])
+        print('Season: {}'.format(season))
+        print('Episode: {}'.format(episode_num))
+    else:
+        print('Found {} episodes'.format(len(episodes)))
+        for e in episodes:
+            season, episode_num = TVDB.season_number(e)
+            print('{}:'.format(e['episodeName']))
+            print('  Season: {}'.format(season))
+            print('  Episode: {}'.format(episode_num))
 
 if __name__ == '__main__':
     main(sys.argv)

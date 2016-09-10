@@ -74,3 +74,11 @@ def extract_metadata(wtv_file):
             else:
                 meta[name] = None
     return meta
+
+if __name__ == '__main__':
+    import sys, json
+    if len(sys.argv) > 1:
+        meta = extract_metadata(sys.argv[1])
+        print(json.dumps(meta))
+    else:
+        print('Too few args')
