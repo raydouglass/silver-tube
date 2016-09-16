@@ -123,8 +123,10 @@ def process(wtv_file, com_file, srt_file):
     if series is not None and season is not None and episode_num is not None:
         filename = os.path.basename(wtv_file)
         filename_wo_ext = os.path.splitext(filename)[0]
-        out_video = os.path.join(OUT_DIR, create_filename(series, season, episode_num, episode_name, filename_wo_ext, 'mp4'))
-        out_srt = os.path.join(OUT_DIR, create_filename(series, season, episode_num, episode_name, filename_wo_ext, 'eng.srt'))
+        out_video = os.path.join(OUT_DIR,
+                                 create_filename(series, season, episode_num, episode_name, filename_wo_ext, 'mp4'))
+        out_srt = os.path.join(OUT_DIR,
+                               create_filename(series, season, episode_num, episode_name, filename_wo_ext, 'eng.srt'))
 
         if not os.path.exists(os.path.dirname(out_video)):
             os.makedirs(os.path.dirname(out_video))
