@@ -168,6 +168,7 @@ class WtvDb():
 
     def resolve(self, wtv_file):
         while True:
+            print('----------------------------------------')
             print(wtv_file.filename)
             print(wtv_file.description)
             print()

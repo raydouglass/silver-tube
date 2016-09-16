@@ -71,13 +71,12 @@ class TVDB():
     def find_episode(self, series, episode=None, air_date=None):
         if episode is None and air_date is None:
             raise Exception('Both episode and air_date cannot be null')
-        id = self.search_series(series).id
-        if id:
+        series = self.search_series(series)
+        if series:
             if episode:
-                episodes = self.get_episodes(id)
+                episodes = self.get_episodes(series.id)
                 for e in episodes:
                     if e['episodeName'] == episode:
-                        #return (e['airedSeason'], e['airedEpisodeNumber'])
                         return [e]
             if air_date:
                 if self._jwt is None:
@@ -90,14 +89,6 @@ class TVDB():
                 res = res.json()
                 if 'data' in res:
                     return res['data']
-                    # if len(res['data']) == 1:
-                    #     e = res['data'][0]
-                    #     return (e['airedSeason'], e['airedEpisodeNumber'])
-                    #     return [e]
-                    # elif self._wtvdb is not None:
-                    #     series_obj = self._wtvdb.get_or_create_series(id, series)
-                    #     candidates = [CandidateEpisode.from_tvdb(series_obj, e) for e in res['data']]
-                    #     WtvFile(filename=)
 
         return []
 
