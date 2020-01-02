@@ -1,4 +1,8 @@
-#Silver Tube
+# Use media-management-scripts instead!
+
+See: https://github.com/raydouglass/media_management_scripts/tree/master/media_management_scripts/silver_tube
+
+# Silver Tube
 
 This script coordinates several tools to process recorded TV and save the files without commercials in a Plex compatible file structure.
 
